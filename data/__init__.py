@@ -14,6 +14,9 @@ def CreateDataset(opt):
     if opt.dataset_mode == 'aligned':
         from data.aligned_dataset import AlignedDataset
         dataset = AlignedDataset()
+    elif opt.dataset_mode == 'aligned2':
+        from data.aligned_dataset2 import AlignedDataset
+        dataset = AlignedDataset()
     elif opt.dataset_mode == 'unaligned':
         from data.unaligned_dataset import UnalignedDataset
         dataset = UnalignedDataset()
