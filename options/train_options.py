@@ -27,6 +27,9 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--use_feature_matching', action='store_true', help='use feature matching')
         parser.add_argument('--lambda_D', type=float, default=[1.0], nargs='+', help='lambda_D')
         parser.add_argument('--lambda_FM', type=float, default=1.0, help='lambda_FM')
+        parser.add_argument('--lambda_L1_I', type=float, default=1.0, help='lambda_L1_I, for loss_P_L1')
+        parser.add_argument('--use_deep_supervision', action='store_true', help='use deep supervision')
+        parser.add_argument('--no_color_embedding', action='store_true', help='no color embedding')
 
         self.isTrain = True
         return parser

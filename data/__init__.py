@@ -23,6 +23,9 @@ def CreateDataset(opt):
     elif opt.dataset_mode == 'single':
         from data.single_dataset import SingleDataset
         dataset = SingleDataset()
+    elif opt.dataset_mode == 'dlg':
+        from data.dlg_dataset import DLGDataset
+        dataset = DLGDataset()
     else:
         raise ValueError("Dataset [%s] not recognized." % opt.dataset_mode)
 

@@ -24,7 +24,7 @@ class Pix2PixMSModel(BaseModel):
         self.isTrain = opt.isTrain
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
         self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake']
-        if self.opt.use_feature_matching:
+        if self.opt.lambda_FM > 0:
             self.loss_names += ['G_FM']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         self.visual_names = ['real_A', 'fake_B', 'real_B']
@@ -37,7 +37,7 @@ class Pix2PixMSModel(BaseModel):
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf,
                                       opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
 
-        if self.isTrain and self.opt.use_feature_matching:
+        if self.isTrain and self.opt.lambda_FM > 0:
             self.netFM = networks.define_FM(opt.init_type, self.gpu_ids)
             self.netFM.load_state_dict(torch.load(os.path.join(self.opt.pretrained_model_dir, 'alexnet-owt-4df8aa71.pth')), strict=False)
 

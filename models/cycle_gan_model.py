@@ -3,6 +3,7 @@ import itertools
 from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
+import os
 
 
 class CycleGANModel(BaseModel):
@@ -32,7 +33,10 @@ class CycleGANModel(BaseModel):
             visual_names_A.append('idt_A')
             visual_names_B.append('idt_B')
 
-        self.visual_names = visual_names_A + visual_names_B
+        if self.isTrain:
+            self.visual_names = visual_names_A + visual_names_B
+        else:
+            self.visual_names = visual_names_A
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
         if self.isTrain:
             if self.opt.continue_train and self.opt.do_not_load_D:
@@ -49,6 +53,9 @@ class CycleGANModel(BaseModel):
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc,
                                         opt.ngf, opt.which_model_netG, opt.norm, not opt.no_dropout, opt.init_type, self.gpu_ids)
+        if self.isTrain and self.opt.lambda_FM > 0:
+            self.netFM = networks.define_FM(opt.init_type, self.gpu_ids)
+            self.netFM.load_state_dict(torch.load(os.path.join(self.opt.pretrained_model_dir, 'alexnet-owt-4df8aa71.pth')), strict=False)
 
         if self.isTrain:
             use_sigmoid = opt.no_lsgan
@@ -76,17 +83,22 @@ class CycleGANModel(BaseModel):
             self.optimizers.append(self.optimizer_D)
 
     def set_input(self, input):
-        AtoB = self.opt.which_direction == 'AtoB'
-        self.real_A = input['A' if AtoB else 'B'].to(self.device)
-        self.real_B = input['B' if AtoB else 'A'].to(self.device)
-        self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        if self.isTrain:
+            AtoB = self.opt.which_direction == 'AtoB'
+            self.real_A = input['A' if AtoB else 'B'].to(self.device)
+            self.real_B = input['B' if AtoB else 'A'].to(self.device)
+            self.image_paths = input['A_paths' if AtoB else 'B_paths']
+        else:
+            self.real_A = input['A'].to(self.device)
+            self.image_paths = input['A_paths']
 
     def forward(self):
         self.fake_B = self.netG_A(self.real_A)
         self.rec_A = self.netG_B(self.fake_B)
 
-        self.fake_A = self.netG_B(self.real_B)
-        self.rec_B = self.netG_A(self.fake_A)
+        if self.isTrain:
+            self.fake_A = self.netG_B(self.real_B)
+            self.rec_B = self.netG_A(self.fake_A)
 
     def backward_D_basic(self, netD, real, fake):
         # Real
@@ -133,6 +145,19 @@ class CycleGANModel(BaseModel):
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
+        # FM cycle
+        if self.opt.lambda_FM > 0:
+            feature_A = self.netFM(self.real_A).detach()
+            feature_A.requires_grad = False
+            self.loss_cycle_FM_A = torch.nn.MSELoss()(self.netFM(self.rec_A), feature_A) * self.opt.lambda_FM
+            feature_B = self.netFM(self.real_B).detach()
+            feature_B.requires_grad = False
+            self.loss_cycle_FM_B = torch.nn.MSELoss()(self.netFM(self.rec_B), feature_B) * self.opt.lambda_FM
+        else:
+            self.loss_cycle_FM_A = 0
+            self.loss_cycle_FM_B = 0
+        self.loss_cycle_A += self.loss_cycle_FM_A
+        self.loss_cycle_B += self.loss_cycle_FM_B
         # combined loss
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
         self.loss_G.backward()
@@ -151,5 +176,3 @@ class CycleGANModel(BaseModel):
         self.backward_D_A()
         self.backward_D_B()
         self.optimizer_D.step()
-
-

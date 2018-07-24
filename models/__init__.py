@@ -35,5 +35,3 @@ def create_model(opt):
     instance.initialize(opt)
     print("model [%s] was created" % (instance.name()))
     return instance
-    
-    
