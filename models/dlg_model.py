@@ -15,16 +15,20 @@ class DLGModel(BaseModel):
         parser.set_defaults(which_model_netG='unet_256')
         if is_train:
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
-
+            parser.add_argument('--lambda_TV', type=float, default=0.0)
+            parser.add_argument('--lambda_L2', type=float, default=0.0)
         return parser
 
     def initialize(self, opt):
         BaseModel.initialize(self, opt)
         self.isTrain = opt.isTrain
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
-        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'P_GAN', 'P_FM', 'P_L1']
+        self.loss_names = ['G_GAN', 'G_L1', 'D_real', 'D_fake', 'P_GAN', 'P_FM', 'P_L1', 'F_TV']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
-        self.visual_names = ['real_A', 'fake_B', 'fake_C', 'fake_I', 'real_B', 'real_I']
+        if self.isTrain:
+            self.visual_names = ['real_A', 'fake_B', 'fake_C', 'fake_I', 'real_B', 'real_I']
+        else:
+            self.visual_names = ['real_A', 'fake_B', 'fake_C', 'fake_I']
         # specify the models you want to save to the disk. The program will call base_model.save_networks and base_model.load_networks
         if self.isTrain:
             self.model_names = ['G', 'F', 'P', 'D', 'D2']
@@ -51,8 +55,9 @@ class DLGModel(BaseModel):
             self.fake_AB_pool = ImagePool(opt.pool_size)
             self.fake_I_pool = ImagePool(opt.pool_size)
             # define loss functions
-            self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan).to(self.device)
+            self.criterionGAN = networks.GANLoss(mse_loss=not opt.no_lsgan).to(self.device)
             self.criterionL1 = torch.nn.L1Loss()
+            self.criterionTV = networks.TVLoss()
 
             # initialize optimizers
             self.optimizers = []
@@ -66,6 +71,10 @@ class DLGModel(BaseModel):
             self.optimizers.append(self.optimizer_F)
             self.optimizers.append(self.optimizer_P)
             self.optimizers.append(self.optimizer_D2)
+
+    def _compute_loss_smooth(self, mat):
+        return torch.sum(torch.abs(mat[:, :, :, :-1] - mat[:, :, :, 1:])) + \
+               torch.sum(torch.abs(mat[:, :, :-1, :] - mat[:, :, 1:, :]))
 
     def set_input(self, input):
         AtoB = self.opt.which_direction == 'AtoB'
@@ -148,7 +157,13 @@ class DLGModel(BaseModel):
         self.loss_P_FM = torch.nn.MSELoss()(self.netFM(self.fake_I), feature_A) * self.opt.lambda_FM
         self.loss_P_L1 = self.criterionL1(self.fake_I, self.real_A) * self.opt.lambda_L1_I
 
-        self.loss_G = self.loss_G_GAN + self.loss_G_L1 + self.loss_P_GAN + self.loss_P_FM + self.loss_P_L1
+        # TV loss
+        if self.opt.lambda_TV > 0:
+            self.loss_F_TV = self.criterionTV(self.fake_C) * self.opt.lambda_TV
+        else:
+            self.loss_F_TV = 0.0
+
+        self.loss_G = self.loss_G_GAN + self.loss_G_L1 + self.loss_P_GAN + self.loss_P_FM + self.loss_P_L1 + self.loss_F_TV
 
         self.loss_G.backward()
 

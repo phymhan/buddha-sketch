@@ -48,6 +48,7 @@ class BaseOptions():
         parser.add_argument('--use_gan_loss', action='store_true', help='use cross GAN loss in regression.')
         parser.add_argument('--weights', type=float, default=None, nargs='+', help='weights for L1 loss in cGAN, or CE loss in segmentation')
         parser.add_argument('--scale_factor', type=int, default=[1], nargs='+', help='scale factor for discriminators')
+        parser.add_argument('--num_Ds', type=int, default=2, help='number of Discrminators')
 
         self.initialized = True
         return parser
